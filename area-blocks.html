@@ -1,0 +1,1461 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Area Blocks</title>
+<style>
+  :root{
+    --bg:#f6f6f3;
+    --panel:#ffffff;
+    --ink:#171717;
+    --muted:#777;
+    --line:#deded8;
+    --cell:18px;
+    --stage-pad:42px;
+    --sidebar:420px;
+    --stage-bg:#f6f6f3;
+    --dot:#b8b8b1;
+    --button:#ffffff;
+    --button-hover:#f2f2ef;
+  }
+
+  body.night{
+    --bg:#1c2633;
+    --panel:#243141;
+    --ink:#e8edf3;
+    --muted:#aab6c3;
+    --line:#3a495a;
+    --stage-bg:#1b2532;
+    --dot:#5d6b7b;
+    --button:#2a394a;
+    --button-hover:#314255;
+  }
+
+  *{box-sizing:border-box}
+  html,body{
+    height:100%;margin:0;
+    font:14px/1.35 Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color:var(--ink);background:var(--bg)
+  }
+  button,input{font:inherit}
+  button{cursor:pointer}
+
+  .app{
+    height:100%;
+    display:grid;
+    grid-template-columns:var(--sidebar) 6px 1fr;
+  }
+
+  aside{
+    background:var(--panel);
+    border-right:1px solid var(--line);
+    display:flex;
+    flex-direction:column;
+    min-height:0;
+    z-index:2;
+  }
+
+  .head{
+    padding:18px;
+    border-bottom:1px solid var(--line);
+  }
+
+  h1{font-size:18px;margin:0 0 4px}
+  .sub{color:var(--muted);font-size:12px}
+
+  .controls{
+    padding:14px 18px;
+    display:grid;
+    gap:10px;
+    border-bottom:1px solid var(--line);
+  }
+
+  .sectionLabel{
+    margin-top:2px;
+    font-size:11px;
+    font-weight:700;
+    text-transform:uppercase;
+    letter-spacing:.08em;
+    color:#999;
+  }
+
+  .row{display:flex;gap:8px;align-items:center}
+  .row > *{min-width:0}
+  .grow{flex:1}
+
+  label.small{
+    color:var(--muted);
+    font-size:12px;
+    display:flex;
+    align-items:center;
+    gap:8px;
+  }
+
+  input[type="number"], input[type="text"]{
+    width:100%;
+    border:1px solid var(--line);
+    border-radius:7px;
+    padding:7px 8px;
+    background:var(--button);
+    color:var(--ink);
+  }
+
+  input[type="color"]{
+    width:34px;height:34px;padding:2px;
+    border:1px solid var(--line);
+    border-radius:7px;background:#fff;
+  }
+
+  input[type="range"]{accent-color:#333}
+
+  .hex{
+    text-transform:uppercase;
+    font-size:12px;
+    letter-spacing:.02em;
+  }
+
+  .smallNumber{
+    width:64px !important;
+    text-align:right;
+    padding:5px 6px !important;
+  }
+
+  .btn{
+    border:1px solid var(--line);
+    background:var(--button);
+    border-radius:7px;
+    padding:8px 10px;
+  }
+  .btn:hover{background:var(--button-hover)}
+  .btn.primary{background:#171717;color:white;border-color:#171717}
+
+  #items{
+    flex:1;
+    overflow:auto;
+    padding:10px;
+  }
+
+  .item{
+    display:grid;
+    grid-template-columns:34px minmax(90px,1fr) 78px 34px 30px;
+    gap:7px;
+    align-items:center;
+    padding:8px;
+    border-bottom:1px solid #eeeeea;
+  }
+
+  .item .areaWrap{position:relative}
+  .item .areaWrap::after{
+    content:"m²";
+    position:absolute;right:7px;top:50%;transform:translateY(-50%);
+    font-size:11px;color:var(--muted);pointer-events:none
+  }
+  .item .area{padding-right:26px}
+
+
+  .colourControl{position:relative}
+  .colourSwatchBtn{
+    width:34px;
+    height:34px;
+    border:1px solid var(--line);
+    border-radius:7px;
+    padding:3px;
+    background:var(--button);
+  }
+  .colourSwatchInner{
+    width:100%;
+    height:100%;
+    border-radius:4px;
+    border:1px solid rgba(0,0,0,.08);
+  }
+  .colourPopover{
+    position:absolute;
+    top:40px;
+    left:0;
+    z-index:100;
+    width:190px;
+    padding:10px;
+    display:none;
+    gap:8px;
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:9px;
+    box-shadow:0 8px 24px rgba(0,0,0,.16);
+  }
+  .colourPopover.open{display:grid}
+  .colourPopover input[type="color"]{
+    width:100%;
+    height:38px;
+  }
+  .colourPopover .hex{
+    width:100%;
+  }
+
+  .textToneBtn{
+    width:34px;
+    height:34px;
+    padding:0;
+    border:1px solid var(--line);
+    background:var(--button);
+    border-radius:7px;
+    display:grid;
+    place-items:center;
+  }
+  .textToneBtn:hover{background:var(--button-hover)}
+  .textToneDot{
+    width:15px;
+    height:15px;
+    border-radius:50%;
+    border:1px solid rgba(127,127,127,.55);
+  }
+
+  .delete{
+    border:0;background:transparent;font-size:18px;color:#999;padding:0
+  }
+  .delete:hover{color:#222}
+
+  .footer{
+    padding:12px 18px 16px;
+    border-top:1px solid var(--line);
+    display:grid;
+    gap:8px;
+  }
+
+  main{
+    min-width:0;
+    min-height:0;
+    overflow:auto;
+    position:relative;
+    background:var(--stage-bg);
+  }
+
+  #resizer{
+    width:6px;
+    cursor:col-resize;
+    background:transparent;
+    position:relative;
+    z-index:4;
+  }
+  #resizer::after{
+    content:"";
+    position:absolute;
+    top:0;bottom:0;
+    left:2px;
+    width:1px;
+    background:var(--line);
+  }
+  #resizer:hover::after{width:2px;left:2px}
+
+  #gridSurface{
+    position:relative;
+    min-width:100%;
+    min-height:100%;
+    width:max-content;
+    height:max-content;
+    padding:var(--stage-pad);
+
+    /* App-only dot matrix. Its first dot is exactly the stage origin. */
+    background-image:radial-gradient(circle, var(--dot) 0.7px, transparent 0.8px);
+    background-size:var(--cell) var(--cell);
+    background-position:var(--stage-pad) var(--stage-pad);
+    background-repeat:repeat;
+    background-origin:border-box;
+  }
+
+  #stage{
+    position:relative;
+    min-width:700px;
+    min-height:520px;
+  }
+
+  .room{
+    position:absolute;
+    pointer-events:none;
+    transition:left .18s ease,top .18s ease;
+  }
+
+  .pixel{position:absolute}
+
+  .pixel.gridOn{
+    border-right:0.5px solid rgba(35,35,35,.24);
+    border-bottom:0.5px solid rgba(35,35,35,.24);
+  }
+
+  .roomLabel{
+    position:absolute;
+    inset:0;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    text-align:center;
+    padding:7px;
+    pointer-events:none;
+  }
+  .roomLabel .name{font-weight:650}
+  .roomLabel .sqm{font-size:12px;opacity:.72;margin-top:2px}
+
+  .empty{
+    position:absolute;inset:0;
+    display:grid;place-items:center;
+    color:#8a8a84;
+    pointer-events:none
+  }
+
+
+
+  body.night .btn{
+    background:#314255;
+    color:#eef3f8;
+    border-color:#53677d;
+  }
+  body.night .btn:hover{
+    background:#3a4d62;
+    border-color:#647a92;
+  }
+  body.night .btn.primary{
+    background:#4b6685;
+    color:#ffffff;
+    border-color:#6e88a6;
+  }
+  body.night .btn.primary:hover{
+    background:#587493;
+  }
+
+  #themeToggle{
+    position:fixed;
+    top:14px;
+    right:14px;
+    z-index:9999;
+    width:44px;
+    height:44px;
+    border:1px solid #3f6485;
+    border-radius:12px;
+    background:#29445f;
+    color:#ffffff;
+    display:grid;
+    place-items:center;
+    padding:0;
+    font-size:20px;
+    box-shadow:0 3px 12px rgba(0,0,0,.10);
+  }
+  #themeToggle:hover{background:#355773}
+  body.night #themeToggle{
+    background:#d7e3ef;
+    border-color:#8ba0b8;
+    color:#24384e;
+  }
+  body.night #themeToggle:hover{background:#c6d7e7}
+
+  /* Palette chooser */
+  .paletteWrap{position:relative}
+  .paletteButton{
+    width:100%;
+    display:grid;
+    grid-template-columns:1fr auto;
+    gap:10px;
+    align-items:center;
+    text-align:left;
+  }
+  .paletteButtonMain{
+    display:grid;
+    gap:5px;
+  }
+  .paletteName{font-size:12px;color:#444}
+  .swatches{
+    display:grid;
+    grid-template-columns:repeat(10,1fr);
+    height:13px;
+    overflow:hidden;
+    border-radius:4px;
+    border:1px solid rgba(0,0,0,.08);
+  }
+  .swatch{min-width:0}
+  .chev{color:#777;font-size:11px}
+
+  .paletteMenu{
+    position:absolute;
+    left:0;right:0;
+    top:calc(100% + 5px);
+    z-index:30;
+    background:var(--button);
+    border:1px solid var(--line);
+    border-radius:9px;
+    box-shadow:0 8px 26px rgba(0,0,0,.12);
+    padding:6px;
+    max-height:310px;
+    overflow:auto;
+    display:none;
+  }
+  .paletteMenu.open{display:block}
+
+  .paletteOption{
+    width:100%;
+    border:0;
+    background:var(--button);
+    padding:8px;
+    border-radius:6px;
+    display:grid;
+    gap:5px;
+    text-align:left;
+  }
+  .paletteOption:hover{background:var(--button-hover)}
+  .paletteOption.active{background:var(--button-hover)}
+  .paletteOptionName{font-size:12px;font-weight:600}
+
+  @media (max-width:860px){
+    .app{grid-template-columns:1fr;grid-template-rows:auto 1fr}
+    aside{border-right:0;border-bottom:1px solid var(--line);max-height:58vh}
+    #resizer{display:none}
+    #gridSurface{
+      --stage-pad:24px;
+    }
+  }
+</style>
+</head>
+<body>
+<button id="themeToggle" title="Toggle night mode" aria-label="Toggle night mode">◐</button>
+<div class="app">
+  <aside>
+    <div class="head">
+      <h1>Area Blocks</h1>
+      <div class="sub">1 grid cell = 1 m²</div>
+    </div>
+
+    <div class="controls">
+      <button class="btn primary" id="addBtn">+ Add item</button>
+
+      <div class="row">
+        <button class="btn grow" id="shuffleBtn">Shuffle layout + shapes</button>
+        <button class="btn" id="clearBtn">Clear</button>
+      </div>
+
+      <div class="sectionLabel">Colours</div>
+      <div class="paletteWrap">
+        <button class="btn paletteButton" id="paletteButton">
+          <div class="paletteButtonMain">
+            <div class="paletteName" id="paletteName">Random Soft</div>
+            <div class="swatches" id="palettePreview"></div>
+          </div>
+          <span class="chev">▼</span>
+        </button>
+        <div class="paletteMenu" id="paletteMenu"></div>
+      </div>
+      <button class="btn" id="shuffleColoursBtn">Shuffle colours</button>
+
+      <label class="small">
+        Gap
+        <input id="gapSlider" type="range" min="0" max="10" step="0.1" value="2.0" class="grow">
+        <input id="gapNumber" class="smallNumber" type="number" min="0" max="10" step="0.1" value="2.0">
+      </label>
+
+      <label class="small">
+        Display cell size
+        <input id="cellInput" type="range" min="10" max="30" step="1" value="18" class="grow">
+        <span id="cellValue">18 px</span>
+      </label>
+
+      <div class="sectionLabel">Display</div>
+      <label class="small">
+        <input id="displayGridInput" type="checkbox">
+        Show grid
+      </label>
+      <label class="small">
+        <input id="invertGridInput" type="checkbox">
+        Invert grid colour
+      </label>
+      <label class="small">
+        <input id="displayTextInput" type="checkbox" checked>
+        Show text
+      </label>
+
+      <div class="sectionLabel">Export</div>
+      <label class="small">
+        <input id="exportGridInput" type="checkbox">
+        Include grid
+      </label>
+      <label class="small">
+        <input id="exportTextInput" type="checkbox">
+        Include text
+      </label>
+    </div>
+
+    <div id="items"></div>
+
+    <div class="footer">
+      <button class="btn" id="exportTogether">Export current layout SVG</button>
+      <button class="btn" id="exportSeparate">Export separate SVGs</button>
+      <button class="btn" id="exportTogetherJpg">Export current layout JPG</button>
+      <button class="btn" id="exportSeparateJpg">Export separate JPGs</button>
+    </div>
+  </aside>
+  <div id="resizer" aria-hidden="true"></div>
+
+  <main>
+    <div id="gridSurface">
+      <div id="stage">
+        <div class="empty" id="emptyState">Add an item to begin</div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script>
+(() => {
+  const PALETTES = [
+    {id:'random', name:'Random Soft', colors:null},
+    {id:'fjord-clay', name:'Fjord Clay', colors:['#0a2d2e','#1c4e4f','#436e6f','#6a8e8f','#879693','#a49e97','#deae9f','#efd7cf','#f7ebe7','#ffffff']},
+    {id:'candy-glass', name:'Candy Glass', colors:['#ffadad','#ffd6a5','#fdffb6','#caffbf','#96e8ff','#a0c4ff','#bdb2ff','#debcff','#ffc6ff','#ffa7dc']},
+    {id:'dusty-rose', name:'Dusty Rose', colors:['#c7a5aa','#b19297','#9c8185','#877074','#735e62','#5e4d50','#4a3c3f','#352b2d','#21191c','#0c080a']},
+    {id:'twilight-lilac', name:'Twilight Lilac', colors:['#6886af','#d7adbe','#ab94b0','#116594','#242d62','#585387','#adb7dc','#b6c6db','#82465c','#c56477']},
+    {id:'harvest', name:'Harvest', colors:['#c7522a','#cb6036','#cf6e41','#d68a58','#dea66f','#e5c185','#f0daa5','#fbf2c4','#dae0b8','#b8cdab']},
+    {id:'atlantic-blue', name:'Atlantic Blue', colors:['#062456','#1d3867','#334d77','#4a6188','#627799','#7a8ca9','#93a2ba','#adb9cb','#c8d0dc','#e3e7ee']},
+    {id:'mint-coral', name:'Mint Coral', colors:['#8aeba9','#82c09f','#7a9494','#8b8895','#9b7b96','#bc7d8a','#de8891','#ff9397','#ff9a80','#ffa780']},
+    {id:'terracotta-coast', name:'Terracotta Coast', colors:['#264653','#287271','#2a9d8f','#8ab17d','#e9c46a','#f4a261','#ec8151','#e36040','#bc6b85','#9576c9']},
+    {id:'forest-depths', name:'Forest Depths', colors:['#42826c','#38705d','#2f5f4e','#254e40','#1c3e32','#142f25','#0b2019','#05120d','#010604','#000100']},
+    {id:'monochrome', name:'Monochrome', colors:['#000000','#101010','#202020','#404040','#606060','#808080','#c0c0c0','#e0e0e0','#f0f0f0','#ffffff']},
+    {id:'spectrum', name:'Spectrum', colors:['#f65356','#fb8066','#fea671','#fec979','#feea80','#d7e586','#a5de94','#5daad8','#8187c7','#c56bba']},
+    {id:'prism-pastel', name:'Prism Pastel', colors:['#ef8d88','#ffadad','#ffd6a5','#fdffb6','#caffbf','#14d1c1','#9bf6ff','#a0c4ff','#bdb2ff','#ffc6ff']},
+    {id:'jade-fade', name:'Jade Fade', colors:['#2e2d2c','#3a4643','#44625c','#4c7d73','#569a8c','#5cb9a6','#60d9c3','#b1ece0','#d7f5ef','#ecfaf6']},
+    {id:'studio-mix', name:'Studio Mix', colors:['#c7522a','#e5c185','#fbf2c4','#b8cdab','#74a892','#008585','#4c9eb3','#abbdec','#cac7ff','#e4d3fc']},
+    {id:'moss-linen', name:'Moss Linen', colors:['#f1ddbf','#cabead','#a29e9a','#525e75','#657980','#78938a','#85a78e','#92ba92','#aeccae','#c9ddc9']},
+    {id:'vintage-field', name:'Vintage Field', colors:['#463c57','#545d6b','#4d7159','#748b5d','#95a269','#b6ae71','#b68663','#b63b49','#98062d','#800022']},
+    {id:'plum-sand', name:'Plum Sand', colors:['#660e60','#893f71','#924b76','#9b577a','#ac6f82','#be888b','#cfa093','#e1b89c','#eac4a0','#f3d0a4']},
+    {id:'burnt-harvest', name:'Burnt Harvest', colors:['#a85633','#cf6e41','#d37c4d','#d68a58','#dea66f','#e5c185','#f0daa5','#fbf2c4','#dae0b8','#b8cdab']},
+    {id:'sandstone', name:'Sandstone', colors:['#f3d0a4','#edcaa0','#e8c49b','#e3bf97','#deb993','#d9b38f','#d4ae8b','#cfa887','#caa383','#c59d7f']},
+    {id:'atelier-earth', name:'Atelier Earth', colors:['#a3a094','#262b27','#55685b','#d6dce1','#dcbda1','#5c392f','#705438','#8c6c50','#d8d5c5','#3c6454']}
+  ];
+
+  const itemsEl = document.getElementById('items');
+  const stage = document.getElementById('stage');
+  const emptyState = document.getElementById('emptyState');
+
+  const gapSlider = document.getElementById('gapSlider');
+  const gapNumber = document.getElementById('gapNumber');
+  const cellInput = document.getElementById('cellInput');
+  const cellValue = document.getElementById('cellValue');
+
+  const displayGridInput = document.getElementById('displayGridInput');
+  const invertGridInput = document.getElementById('invertGridInput');
+  const displayTextInput = document.getElementById('displayTextInput');
+  const exportGridInput = document.getElementById('exportGridInput');
+  const exportTextInput = document.getElementById('exportTextInput');
+
+  const paletteButton = document.getElementById('paletteButton');
+  const paletteName = document.getElementById('paletteName');
+  const palettePreview = document.getElementById('palettePreview');
+  const paletteMenu = document.getElementById('paletteMenu');
+
+  let items = [];
+  let arrangement = [];
+  let nextId = 1;
+  let shuffleSeed = Math.random();
+  let activePaletteId = 'random';
+  let activeColourSequence = [];
+
+  function paletteById(id){
+    return PALETTES.find(p=>p.id===id) || PALETTES[0];
+  }
+
+  function hexToRgb(hex){
+    return [
+      parseInt(hex.slice(1,3),16),
+      parseInt(hex.slice(3,5),16),
+      parseInt(hex.slice(5,7),16)
+    ];
+  }
+
+  function rgbDistance(a,b){
+    const A=hexToRgb(a), B=hexToRgb(b);
+    return Math.sqrt((A[0]-B[0])**2 + (A[1]-B[1])**2 + (A[2]-B[2])**2);
+  }
+
+  function hslToHex(h,s,l){
+    s/=100; l/=100;
+    const c=(1-Math.abs(2*l-1))*s;
+    const x=c*(1-Math.abs((h/60)%2-1));
+    const m=l-c/2;
+    let r=0,g=0,b=0;
+    if(h<60)[r,g,b]=[c,x,0];
+    else if(h<120)[r,g,b]=[x,c,0];
+    else if(h<180)[r,g,b]=[0,c,x];
+    else if(h<240)[r,g,b]=[0,x,c];
+    else if(h<300)[r,g,b]=[x,0,c];
+    else [r,g,b]=[c,0,x];
+    return "#" + [r,g,b].map(v=>Math.round((v+m)*255).toString(16).padStart(2,'0')).join('');
+  }
+
+  function randomSoftPalette(count=10){
+    const result=[];
+    const target=Math.max(10,count);
+    const candidates=[];
+
+    for(let h=0;h<360;h+=6){
+      for(const s of [28,34,40,46]){
+        for(const l of [74,79,84]){
+          candidates.push(hslToHex(h,s,l));
+        }
+      }
+    }
+
+    let first=candidates[Math.floor(Math.random()*candidates.length)];
+    result.push(first);
+
+    while(result.length<target){
+      let best=null,bestDist=-1;
+      for(const c of candidates){
+        if(result.includes(c)) continue;
+        const d=Math.min(...result.map(r=>rgbDistance(c,r))) + Math.random()*5;
+        if(d>bestDist){bestDist=d;best=c;}
+      }
+      result.push(best);
+    }
+
+    // Randomize order while retaining separation.
+    return shuffled(result, Math.random);
+  }
+
+  function spreadPalette(colors){
+    if(colors.length<=2) return [...colors];
+
+    const remaining=[...colors];
+    const ordered=[remaining.shift()];
+
+    while(remaining.length){
+      let bestIndex=0,bestDist=-1;
+      for(let i=0;i<remaining.length;i++){
+        const d=Math.min(...ordered.map(c=>rgbDistance(c,remaining[i])));
+        if(d>bestDist){bestDist=d;bestIndex=i;}
+      }
+      ordered.push(remaining.splice(bestIndex,1)[0]);
+    }
+    return ordered;
+  }
+
+  function shuffled(arr,rnd=Math.random){
+    const a=[...arr];
+    for(let i=a.length-1;i>0;i--){
+      const j=Math.floor(rnd()*(i+1));
+      [a[i],a[j]]=[a[j],a[i]];
+    }
+    return a;
+  }
+
+  function refreshColourSequence(regenerateRandom=false){
+    const p=paletteById(activePaletteId);
+    if(p.id==='random'){
+      if(regenerateRandom || !activeColourSequence.length){
+        activeColourSequence=randomSoftPalette(Math.max(10,items.length));
+      }
+    } else {
+      activeColourSequence=spreadPalette(p.colors);
+    }
+  }
+
+  function colourForIndex(index){
+    if(!activeColourSequence.length) refreshColourSequence(true);
+    return activeColourSequence[index % activeColourSequence.length];
+  }
+
+  function applyActivePalette(){
+    refreshColourSequence(true);
+    items.forEach((item,i)=>item.color=colourForIndex(i));
+    rebuild(true);
+    renderPaletteControl();
+  }
+
+  function shuffleColours(){
+    const p=paletteById(activePaletteId);
+
+    if(p.id==='random'){
+      activeColourSequence=randomSoftPalette(Math.max(10,items.length));
+    } else {
+      activeColourSequence=shuffled(p.colors);
+    }
+
+    items.forEach((item,i)=>item.color=colourForIndex(i));
+    rebuild(true);
+    renderPaletteControl();
+  }
+
+  function isValidHex(value){
+    return /^#[0-9A-Fa-f]{6}$/.test(value);
+  }
+
+  function contrastTextColor(hex){
+    const [r,g,b]=hexToRgb(hex).map(v=>v/255);
+    const linear = v => v <= 0.03928 ? v/12.92 : Math.pow((v+0.055)/1.055,2.4);
+    const L = 0.2126*linear(r) + 0.7152*linear(g) + 0.0722*linear(b);
+    return L > 0.42 ? '#111111' : '#ffffff';
+  }
+
+  function effectiveTextColor(item){
+    const auto=contrastTextColor(item.color);
+    return item.textMode==='invert'
+      ? (auto==='#ffffff' ? '#111111' : '#ffffff')
+      : auto;
+  }
+
+  function swatchesHtml(colors){
+    const c=colors && colors.length ? colors : activeColourSequence;
+    return (c || []).slice(0,10).map(x=>`<span class="swatch" style="background:${x}"></span>`).join('');
+  }
+
+  function renderPaletteControl(){
+    refreshColourSequence(false);
+    const p=paletteById(activePaletteId);
+    paletteName.textContent=p.name;
+    palettePreview.innerHTML=swatchesHtml(p.id==='random' ? activeColourSequence : p.colors);
+
+    paletteMenu.innerHTML=PALETTES.map(option=>{
+      let preview=option.colors;
+      if(option.id==='random'){
+        preview=['#E8C7CF','#F1D4B8','#EAE5B9','#CDE4C5','#BFE1DD','#C5D8EB','#D2CBEB','#E5CAE2','#D8D4C8','#C9DED0'];
+      }
+      return `
+        <button class="paletteOption ${option.id===activePaletteId?'active':''}" data-palette="${option.id}">
+          <div class="paletteOptionName">${option.name}</div>
+          <div class="swatches">${swatchesHtml(preview)}</div>
+        </button>`;
+    }).join('');
+
+    paletteMenu.querySelectorAll('.paletteOption').forEach(btn=>{
+      btn.addEventListener('click',()=>{
+        activePaletteId=btn.dataset.palette;
+        paletteMenu.classList.remove('open');
+        applyActivePalette();
+      });
+    });
+  }
+
+  paletteButton.addEventListener('click',e=>{
+    e.stopPropagation();
+    paletteMenu.classList.toggle('open');
+  });
+
+  document.addEventListener('click',e=>{
+    if(!paletteMenu.contains(e.target) && !paletteButton.contains(e.target)){
+      paletteMenu.classList.remove('open');
+    }
+    document.querySelectorAll('.colourPopover.open').forEach(p=>p.classList.remove('open'));
+  });
+
+  // ---------- deterministic RNG for geometry ----------
+  function rngFactory(seed){
+    let x=Math.floor(seed*2147483647)||1;
+    return ()=>{
+      x=x*16807%2147483647;
+      return (x-1)/2147483646;
+    };
+  }
+
+  // ---------- exact geometry ----------
+  // Shape is determined only by area, so equal areas always match.
+  // Perfect-square integer areas become exact squares.
+  function buildGeometry(area){
+    const exact=Math.max(0.01,Number(area)||0.01);
+    const full=Math.floor(exact + 1e-9);
+    const frac=Math.max(0,Math.min(0.999999,exact-full));
+    const count=full + (frac>1e-8 ? 1 : 0);
+
+    if(count<=1){
+      return {width:1,height:1,cells:[{x:0,y:0,fraction:exact}]};
+    }
+
+    let best=null;
+    for(let cols=1; cols<=count; cols++){
+      const rows=Math.ceil(count/cols);
+      const empty=cols*rows-count;
+      const squarePenalty=Math.abs(cols-rows);
+      // Prefer a square/near-square footprint, while keeping the exact
+      // number of filled cells visible as a stepped edge where necessary.
+      const score=squarePenalty + empty*0.4;
+      if(!best || score<best.score){
+        best={cols,rows,score};
+      }
+    }
+
+    let cols=best.cols;
+    let rows=best.rows;
+    if(rows>cols) [cols,rows]=[rows,cols];
+
+    const cells=[];
+    for(let i=0;i<count;i++){
+      const x=i%cols;
+      const y=Math.floor(i/cols);
+      let fraction=1;
+      if(i===count-1 && frac>1e-8) fraction=frac;
+      cells.push({x,y,fraction});
+    }
+
+    return {width:cols,height:rows,cells};
+  }
+
+  // ---------- data ----------
+  function addItem(name="",area=20){
+    const id=nextId++;
+    refreshColourSequence(false);
+
+    items.push({
+      id,
+      name:name||`Room ${id}`,
+      area,
+      color:colourForIndex(items.length),
+      textMode:'auto'
+    });
+
+    rebuild(true);
+  }
+
+  function deleteItem(id){
+    items=items.filter(i=>i.id!==id);
+    rebuild(true);
+  }
+
+  // ---------- packing ----------
+  function getGap(){
+    return Math.round(Math.max(0,Math.min(10,Number(gapNumber.value)||0))*10)/10;
+  }
+
+  function pack(){
+    const gap=getGap();
+    const rnd=rngFactory(shuffleSeed);
+    const cloudMode=rnd()<0.5;
+
+    let rooms=items.map(item=>({
+      item,
+      geometry:buildGeometry(item.area)
+    }));
+
+    rooms=shuffled(rooms,rnd);
+
+    const placed=[];
+
+    function localRects(room){
+      return room.geometry.cells.map(px=>({
+        x:px.x,
+        y:px.y,
+        w:px.fraction,
+        h:1
+      }));
+    }
+
+    function worldRects(room,x=room.x,y=room.y){
+      return localRects(room).map(r=>({
+        x:x+r.x,
+        y:y+r.y,
+        w:r.w,
+        h:r.h
+      }));
+    }
+
+    function rectGapOkay(a,b){
+      const separatedX =
+        a.x+a.w+gap <= b.x + 1e-9 ||
+        b.x+b.w+gap <= a.x + 1e-9;
+
+      const separatedY =
+        a.y+a.h+gap <= b.y + 1e-9 ||
+        b.y+b.h+gap <= a.y + 1e-9;
+
+      return separatedX || separatedY;
+    }
+
+    function validPlacement(room,x,y){
+      const candidate=worldRects(room,x,y);
+      for(const p of placed){
+        const existing=worldRects(p);
+        for(const a of candidate){
+          for(const b of existing){
+            if(!rectGapOkay(a,b)) return false;
+          }
+        }
+      }
+      return true;
+    }
+
+    function occupiedBounds(list){
+      if(!list.length) return {minX:0,minY:0,maxX:0,maxY:0};
+      let minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=-Infinity;
+      for(const p of list){
+        for(const r of worldRects(p)){
+          minX=Math.min(minX,r.x);
+          minY=Math.min(minY,r.y);
+          maxX=Math.max(maxX,r.x+r.w);
+          maxY=Math.max(maxY,r.y+r.h);
+        }
+      }
+      return {minX,minY,maxX,maxY};
+    }
+
+    function candidatePositions(room){
+      if(!placed.length) return [{x:0,y:0}];
+
+      const candidates=[];
+      const local=localRects(room);
+
+      // Align actual occupied cell edges against actual occupied cell edges,
+      // so the requested gap is measured from visible geometry rather than
+      // from the room's bounding box.
+      for(const p of placed){
+        const existing=worldRects(p);
+
+        for(const a of local){
+          for(const b of existing){
+            candidates.push(
+              {x:(b.x+b.w+gap)-a.x, y:b.y-a.y},
+              {x:(b.x-gap)-(a.x+a.w), y:b.y-a.y},
+              {x:b.x-a.x, y:(b.y+b.h+gap)-a.y},
+              {x:b.x-a.x, y:(b.y-gap)-(a.y+a.h)}
+            );
+          }
+        }
+      }
+
+      // Keep positions non-negative so the composition stays within stage origin.
+      const filtered=candidates
+        .map(c=>({x:Math.max(0,c.x),y:Math.max(0,c.y)}))
+        .filter(c=>validPlacement(room,c.x,c.y));
+
+      const unique=[...new Map(
+        filtered.map(c=>[
+          `${c.x.toFixed(4)},${c.y.toFixed(4)}`,
+          c
+        ])
+      ).values()];
+
+      if(unique.length) return unique;
+
+      const b=occupiedBounds(placed);
+      return [{x:b.maxX+gap,y:0}];
+    }
+
+    for(const room of rooms){
+      const candidates=shuffled(candidatePositions(room),rnd);
+
+      let best=candidates[0];
+      let bestScore=Infinity;
+
+      for(const c of candidates){
+        const test={...room,x:c.x,y:c.y};
+        const bounds=occupiedBounds([...placed,test]);
+        const width=bounds.maxX-bounds.minX;
+        const height=bounds.maxY-bounds.minY;
+        const area=width*height;
+        const aspectPenalty=Math.abs(width-height);
+
+        let score;
+        if(cloudMode){
+          // Looser clustered compositions: still exact gap, but less rigid packing.
+          const cx=(bounds.minX+bounds.maxX)/2;
+          const cy=(bounds.minY+bounds.maxY)/2;
+          const rcx=c.x+room.geometry.width/2;
+          const rcy=c.y+room.geometry.height/2;
+          const radius=Math.hypot(rcx-cx,rcy-cy);
+          score=area*0.76 + radius*1.2 + rnd()*Math.max(2,area*0.16);
+        }else{
+          score=area + aspectPenalty*0.5 + rnd()*Math.max(1,area*0.035);
+        }
+
+        if(score<bestScore){
+          bestScore=score;
+          best=c;
+        }
+      }
+
+      placed.push({...room,x:best.x,y:best.y});
+    }
+
+    const bounds=occupiedBounds(placed);
+    arrangement=placed;
+
+    return {
+      placed,
+      maxX:bounds.maxX,
+      maxY:bounds.maxY
+    };
+  }
+
+  // ---------- UI ----------
+  function renderSidebar(){
+    itemsEl.innerHTML="";
+
+    items.forEach(item=>{
+      const row=document.createElement('div');
+      row.className='item';
+
+      const tone=effectiveTextColor(item);
+
+      row.innerHTML=`
+        <div class="colourControl">
+          <button class="colourSwatchBtn" title="Edit colour" aria-label="Edit colour">
+            <div class="colourSwatchInner" style="background:${item.color}"></div>
+          </button>
+          <div class="colourPopover">
+            <input class="colourPicker" type="color" value="${item.color}" aria-label="Colour">
+            <input class="hex" type="text" value="${item.color}" maxlength="7" aria-label="Hex colour">
+          </div>
+        </div>
+        <input class="nameInput" type="text" value="${escapeHtml(item.name)}" aria-label="Name">
+        <div class="areaWrap">
+          <input class="area" type="number" min="0.01" step="0.01" value="${item.area}" aria-label="Area">
+        </div>
+        <button class="textToneBtn" title="Invert label colour">
+          <span class="textToneDot" style="background:${tone}"></span>
+        </button>
+        <button class="delete" title="Delete">×</button>
+      `;
+
+      const colourControl=row.querySelector('.colourControl');
+      const colourButton=row.querySelector('.colourSwatchBtn');
+      const colourInner=row.querySelector('.colourSwatchInner');
+      const colourPopover=row.querySelector('.colourPopover');
+      const colour=row.querySelector('.colourPicker');
+      const hex=row.querySelector('.hex');
+      const name=row.querySelector('.nameInput');
+      const area=row.querySelector('.area');
+      const toneBtn=row.querySelector('.textToneBtn');
+      const del=row.querySelector('.delete');
+
+      colourButton.addEventListener('click',e=>{
+        e.stopPropagation();
+        document.querySelectorAll('.colourPopover.open').forEach(p=>{
+          if(p!==colourPopover) p.classList.remove('open');
+        });
+        colourPopover.classList.toggle('open');
+      });
+
+      colourPopover.addEventListener('click',e=>e.stopPropagation());
+
+      colour.addEventListener('input',e=>{
+        item.color=e.target.value.toUpperCase();
+        hex.value=item.color;
+        colourInner.style.background=item.color;
+        renderStage();
+      });
+
+      hex.addEventListener('input',e=>{
+        let value=e.target.value.trim();
+        if(value && !value.startsWith('#')) value='#'+value;
+        e.target.value=value.toUpperCase();
+
+        if(isValidHex(value)){
+          item.color=value.toUpperCase();
+          colour.value=item.color;
+          colourInner.style.background=item.color;
+          renderStage();
+        }
+      });
+
+      hex.addEventListener('blur',()=>{
+        if(!isValidHex(hex.value)) hex.value=item.color;
+      });
+
+      name.addEventListener('input',e=>{
+        item.name=e.target.value;
+        renderStage();
+      });
+
+      area.addEventListener('input',e=>{
+        item.area=Math.max(.01,Number(e.target.value)||.01);
+        renderStage();
+      });
+
+      toneBtn.addEventListener('click',()=>{
+        item.textMode=item.textMode==='invert' ? 'auto' : 'invert';
+        rebuild(true);
+      });
+
+      del.addEventListener('click',()=>deleteItem(item.id));
+
+      itemsEl.appendChild(row);
+    });
+  }
+
+  function renderStage(){
+    [...stage.querySelectorAll('.room')].forEach(el=>el.remove());
+    emptyState.style.display=items.length?'none':'grid';
+
+    const cell=Number(cellInput.value);
+    document.documentElement.style.setProperty('--cell',cell+'px');
+
+    const {placed,maxX,maxY}=pack();
+
+    stage.style.width=Math.max(700,(maxX+6)*cell)+'px';
+    stage.style.height=Math.max(520,(maxY+6)*cell)+'px';
+
+    for(const p of placed){
+      const room=document.createElement('div');
+      room.className='room';
+      room.style.left=(p.x*cell)+'px';
+      room.style.top=(p.y*cell)+'px';
+      room.style.width=(p.geometry.width*cell)+'px';
+      room.style.height=(p.geometry.height*cell)+'px';
+
+      for(const px of p.geometry.cells){
+        const el=document.createElement('div');
+        el.className='pixel'+(displayGridInput.checked?' gridOn':'');
+        if(displayGridInput.checked){
+          const gridColour=invertGridInput.checked ? 'rgba(255,255,255,.42)' : 'rgba(35,35,35,.24)';
+          el.style.borderRightColor=gridColour;
+          el.style.borderBottomColor=gridColour;
+        }
+        el.style.left=(px.x*cell)+'px';
+        el.style.top=(px.y*cell)+'px';
+        el.style.width=(cell*px.fraction)+'px';
+        el.style.height=cell+'px';
+        el.style.background=p.item.color;
+        room.appendChild(el);
+      }
+
+      if(displayTextInput.checked){
+        const label=document.createElement('div');
+        label.className='roomLabel';
+        label.style.color=effectiveTextColor(p.item);
+        label.innerHTML=`
+          <div>
+            <div class="name">${escapeHtml(p.item.name)}</div>
+            <div class="sqm">${formatArea(p.item.area)} m²</div>
+          </div>`;
+        room.appendChild(label);
+      }
+
+      stage.appendChild(room);
+    }
+  }
+
+  function rebuild(sidebar=false){
+    if(sidebar) renderSidebar();
+    renderStage();
+  }
+
+  function escapeHtml(str){
+    return String(str).replace(/[&<>"']/g,m=>({
+      "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"
+    }[m]));
+  }
+
+  function escapeXml(str){return escapeHtml(str)}
+
+  function formatArea(n){
+    return Number(n).toLocaleString(undefined,{maximumFractionDigits:2});
+  }
+
+  function safeName(s){
+    return String(s||"item")
+      .trim()
+      .replace(/[^\w\-]+/g,'_')
+      .replace(/^_+|_+$/g,'')||'item';
+  }
+
+  // ---------- SVG ----------
+  const EXPORT_CELL=20;
+
+  function svgLabel(item,w,h){
+    if(!exportTextInput.checked) return "";
+
+    const minDim=Math.min(w,h);
+    if(minDim<34) return "";
+
+    const fs=Math.max(10,Math.min(18,minDim/5));
+    const x=w/2;
+    const y=h/2;
+    const fill=effectiveTextColor(item);
+
+    return `
+      <text x="${x}" y="${y-fs*.18}"
+        text-anchor="middle" dominant-baseline="central"
+        font-family="Inter, Arial, Helvetica, sans-serif"
+        font-size="${fs}" font-weight="600" fill="${fill}">${escapeXml(item.name)}</text>
+      <text x="${x}" y="${y+fs*.95}"
+        text-anchor="middle" dominant-baseline="central"
+        font-family="Inter, Arial, Helvetica, sans-serif"
+        font-size="${fs*.72}" fill="${fill}" opacity=".78">${escapeXml(formatArea(item.area))} m²</text>`;
+  }
+
+  function svgShapeLayer(p){
+    return p.geometry.cells.map(px=>{
+      const x=px.x*EXPORT_CELL;
+      const y=px.y*EXPORT_CELL;
+      const w=px.fraction*EXPORT_CELL;
+      return `<rect x="${x}" y="${y}" width="${w}" height="${EXPORT_CELL}" fill="${p.item.color}"/>`;
+    }).join('');
+  }
+
+  function svgGridLayer(p){
+    if(!exportGridInput.checked) return "";
+
+    return p.geometry.cells.map(px=>{
+      const x=px.x*EXPORT_CELL;
+      const y=px.y*EXPORT_CELL;
+      const w=px.fraction*EXPORT_CELL;
+      const stroke=invertGridInput.checked ? "#ffffff" : "#555555";
+      const opacity=invertGridInput.checked ? "0.48" : "0.30";
+      return `<rect x="${x}" y="${y}" width="${w}" height="${EXPORT_CELL}" fill="none" stroke="${stroke}" stroke-opacity="${opacity}" stroke-width="0.5"/>`;
+    }).join('');
+  }
+
+  function individualSvg(p){
+    const w=p.geometry.width*EXPORT_CELL;
+    const h=p.geometry.height*EXPORT_CELL;
+
+    return `<svg xmlns="http://www.w3.org/2000/svg"
+      width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">
+      <g id="shape" data-layer="shape">
+        ${svgShapeLayer(p)}
+      </g>
+      <g id="grid" data-layer="grid">
+        ${svgGridLayer(p)}
+      </g>
+      <g id="text" data-layer="text">
+        ${svgLabel(p.item,w,h)}
+      </g>
+    </svg>`;
+  }
+
+  function togetherSvg(){
+    if(!arrangement.length) pack();
+
+    let maxX=0,maxY=0;
+
+    for(const p of arrangement){
+      maxX=Math.max(maxX,p.x+p.geometry.width);
+      maxY=Math.max(maxY,p.y+p.geometry.height);
+    }
+
+    const width=maxX*EXPORT_CELL;
+    const height=maxY*EXPORT_CELL;
+
+    const shapeGroups=arrangement.map(p=>{
+      const tx=p.x*EXPORT_CELL;
+      const ty=p.y*EXPORT_CELL;
+      return `<g transform="translate(${tx} ${ty})">${svgShapeLayer(p)}</g>`;
+    }).join('');
+
+    const gridGroups=arrangement.map(p=>{
+      if(!exportGridInput.checked) return "";
+      const tx=p.x*EXPORT_CELL;
+      const ty=p.y*EXPORT_CELL;
+      return `<g transform="translate(${tx} ${ty})">${svgGridLayer(p)}</g>`;
+    }).join('');
+
+    const textGroups=arrangement.map(p=>{
+      if(!exportTextInput.checked) return "";
+      const tx=p.x*EXPORT_CELL;
+      const ty=p.y*EXPORT_CELL;
+      const w=p.geometry.width*EXPORT_CELL;
+      const h=p.geometry.height*EXPORT_CELL;
+      return `<g transform="translate(${tx} ${ty})">${svgLabel(p.item,w,h)}</g>`;
+    }).join('');
+
+    return `<svg xmlns="http://www.w3.org/2000/svg"
+      width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
+      <g id="shape" data-layer="shape">
+        ${shapeGroups}
+      </g>
+      <g id="grid" data-layer="grid">
+        ${gridGroups}
+      </g>
+      <g id="text" data-layer="text">
+        ${textGroups}
+      </g>
+    </svg>`;
+  }
+
+  function downloadText(filename,text,type="image/svg+xml"){
+    const blob=new Blob([text],{type});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');
+    a.href=url;
+    a.download=filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url),1000);
+  }
+
+
+  async function svgToJpgBlob(svgText, background="#ffffff", scale=2){
+    return new Promise((resolve,reject)=>{
+      const svgBlob=new Blob([svgText],{type:"image/svg+xml;charset=utf-8"});
+      const url=URL.createObjectURL(svgBlob);
+      const img=new Image();
+
+      img.onload=()=>{
+        try{
+          const vb=img.width && img.height
+            ? {w:img.width,h:img.height}
+            : {w:1200,h:800};
+
+          const canvas=document.createElement('canvas');
+          canvas.width=Math.max(1,Math.round(vb.w*scale));
+          canvas.height=Math.max(1,Math.round(vb.h*scale));
+
+          const ctx=canvas.getContext('2d');
+          ctx.scale(scale,scale);
+          ctx.fillStyle=background;
+          ctx.fillRect(0,0,vb.w,vb.h);
+          ctx.drawImage(img,0,0,vb.w,vb.h);
+
+          URL.revokeObjectURL(url);
+          canvas.toBlob(blob=>{
+            if(blob) resolve(blob);
+            else reject(new Error("Could not create JPG"));
+          },"image/jpeg",0.95);
+        }catch(err){
+          URL.revokeObjectURL(url);
+          reject(err);
+        }
+      };
+
+      img.onerror=()=>{
+        URL.revokeObjectURL(url);
+        reject(new Error("Could not render SVG"));
+      };
+
+      img.src=url;
+    });
+  }
+
+  function downloadBlob(filename,blob){
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');
+    a.href=url;
+    a.download=filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url),1000);
+  }
+
+  // ---------- events ----------
+  document.getElementById('addBtn').addEventListener('click',()=>{
+    const randomArea=Math.floor(Math.random()*61)+20;
+    addItem("",randomArea);
+  });
+
+  document.getElementById('shuffleBtn').addEventListener('click',()=>{
+    shuffleSeed=Math.random();
+    renderStage();
+  });
+
+  document.getElementById('shuffleColoursBtn').addEventListener('click',shuffleColours);
+
+  document.getElementById('clearBtn').addEventListener('click',()=>{
+    items=[];
+    arrangement=[];
+    rebuild(true);
+  });
+
+  function setGap(value,source){
+    const v=Math.round(Math.max(0,Math.min(10,Number(value)||0))*10)/10;
+    if(source!=='slider') gapSlider.value=v.toFixed(1);
+    if(source!=='number') gapNumber.value=v.toFixed(1);
+    renderStage();
+  }
+
+  gapSlider.addEventListener('input',()=>setGap(gapSlider.value,'slider'));
+  gapNumber.addEventListener('input',()=>setGap(gapNumber.value,'number'));
+  gapNumber.addEventListener('blur',()=>setGap(gapNumber.value,''));
+
+  cellInput.addEventListener('input',()=>{
+    cellValue.textContent=cellInput.value+' px';
+    renderStage();
+  });
+
+  displayGridInput.addEventListener('change',renderStage);
+  invertGridInput.addEventListener('change',renderStage);
+  displayTextInput.addEventListener('change',renderStage);
+
+  document.getElementById('exportTogether').addEventListener('click',()=>{
+    if(!items.length) return;
+    downloadText('area-blocks-layout.svg',togetherSvg());
+  });
+
+  document.getElementById('exportSeparate').addEventListener('click',()=>{
+    if(!items.length) return;
+    if(!arrangement.length) pack();
+
+    arrangement.forEach((p,i)=>{
+      setTimeout(()=>{
+        downloadText(
+          `${String(i+1).padStart(2,'0')}_${safeName(p.item.name)}.svg`,
+          individualSvg(p)
+        );
+      },i*90);
+    });
+  });
+
+  document.getElementById('exportTogetherJpg').addEventListener('click',async()=>{
+    if(!items.length) return;
+    const svg=togetherSvg();
+    const bg=document.body.classList.contains('night') ? '#1b2532' : '#ffffff';
+    try{
+      const blob=await svgToJpgBlob(svg,bg,2);
+      downloadBlob('area-blocks-layout.jpg',blob);
+    }catch(err){
+      console.error(err);
+    }
+  });
+
+  document.getElementById('exportSeparateJpg').addEventListener('click',async()=>{
+    if(!items.length) return;
+    if(!arrangement.length) pack();
+    const bg=document.body.classList.contains('night') ? '#1b2532' : '#ffffff';
+
+    for(let i=0;i<arrangement.length;i++){
+      const p=arrangement[i];
+      try{
+        const blob=await svgToJpgBlob(individualSvg(p),bg,2);
+        downloadBlob(
+          `${String(i+1).padStart(2,'0')}_${safeName(p.item.name)}.jpg`,
+          blob
+        );
+        await new Promise(r=>setTimeout(r,90));
+      }catch(err){
+        console.error(err);
+      }
+    }
+  });
+
+
+  // ---------- sidebar resize ----------
+  const resizer=document.getElementById('resizer');
+  let resizing=false;
+
+  resizer.addEventListener('mousedown',()=>{
+    resizing=true;
+    document.body.style.userSelect='none';
+    document.body.style.cursor='col-resize';
+  });
+
+  window.addEventListener('mousemove',e=>{
+    if(!resizing) return;
+    const width=Math.max(300,Math.min(700,e.clientX));
+    document.documentElement.style.setProperty('--sidebar',width+'px');
+  });
+
+  window.addEventListener('mouseup',()=>{
+    resizing=false;
+    document.body.style.userSelect='';
+    document.body.style.cursor='';
+  });
+
+  // ---------- night mode ----------
+  const themeToggle=document.getElementById('themeToggle');
+  themeToggle.addEventListener('click',()=>{
+    document.body.classList.toggle('night');
+    themeToggle.textContent=document.body.classList.contains('night') ? '☀' : '◐';
+  });
+
+  // Initial palette + starter examples
+  refreshColourSequence(true);
+  renderPaletteControl();
+
+  addItem('Room 1',20);
+  addItem('Room 2',20);
+  addItem('Room 3',20);
+})();
+</script>
+</body>
+</html>
