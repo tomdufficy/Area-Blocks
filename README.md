@@ -14,10 +14,10 @@ Area Blocks is a lightweight browser-based tool for quickly visualising programm
 - Optional grid and room labels
 - Light and dark modes
 - Adjustable display scale and spacing
-- Export the complete layout as SVG or JPG
-- Export individual rooms as SVG or JPG ZIP archives
-- Save and reload projects as JSON
-- Automatically restore the last browser session
+- Automatic local session saving
+- Save and load projects as JSON
+- Reset the app to its original state
+- Export layouts and individual rooms as SVG or JPG
 
 ## Usage
 
@@ -25,9 +25,34 @@ Open `index.html` in a modern web browser. No installation or server is required
 
 Add rooms and enter their required areas. Use **Shuffle layout + shapes** to explore different arrangements and **Shuffle colours** or the palette selector to adjust the graphic appearance.
 
-Use **Save State** to save the current project as a JSON file. A saved state can later be restored using **Load State**.
+### Saving and Loading
 
-Export options allow either the complete arrangement or each individual room to be exported for use in other drawing and graphics software.
+The app automatically saves your current state using your browser's local storage.
+
+This autosaved state is **local to your browser**. It is not uploaded to GitHub, shared with other users, or synchronised between browsers or devices. Each person opening the GitHub Pages site therefore has their own independent saved state.
+
+Refreshing or reopening the page in the same browser will restore your previous session.
+
+For project management:
+
+- **Save State** — downloads the current project as a `.json` file
+- **Load State** — restores a previously saved `.json` file
+- **Reset app** — clears the locally saved session and returns the app to its original default state
+
+JSON state files can be transferred between browsers, devices, or users, making it easy to share programme configurations, colour schemes, layout settings, and other project options.
+
+### Exporting
+
+The app provides four export options:
+
+- **Export current layout SVG** — exports the complete arrangement as a single `.svg` file
+- **Export separate SVGs** — exports every programme area as an individual `.svg` file, packaged together in a `.zip` archive
+- **Export current layout JPG** — exports the complete arrangement as a single `.jpg` file
+- **Export separate JPGs** — exports every programme area as an individual `.jpg` file, packaged together in a `.zip` archive
+
+The **Include grid** and **Include text** options control whether the grid and room labels are included in exported files.
+
+SVG provides editable vector output suitable for further graphic editing, while JPG provides a standard raster image suitable for presentations, documents, and quick sharing.
 
 ## Units
 
