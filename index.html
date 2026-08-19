@@ -483,6 +483,11 @@
     <div id="items"></div>
 
     <div class="footer">
+      <div class="row">
+        <button class="btn grow" id="saveStateBtn">Save state</button>
+        <button class="btn grow" id="loadStateBtn">Load state</button>
+        <input id="loadStateInput" type="file" accept="application/json,.json" hidden>
+      </div>
       <button class="btn" id="exportTogether">Export current layout SVG</button>
       <button class="btn" id="exportSeparate">Export separate SVGs</button>
       <button class="btn" id="exportTogetherJpg">Export current layout JPG</button>
@@ -554,6 +559,10 @@
   let shuffleSeed = Math.random();
   let activePaletteId = 'random';
   let activeColourSequence = [];
+  let restoringState = false;
+
+  const STATE_KEY = 'area-blocks-state-v1';
+  const STATE_VERSION = 1;
 
   function paletteById(id){
     return PALETTES.find(p=>p.id===id) || PALETTES[0];
@@ -1128,6 +1137,8 @@
 
       stage.appendChild(room);
     }
+
+    saveLocalState();
   }
 
   function rebuild(sidebar=false){
@@ -1152,6 +1163,108 @@
       .trim()
       .replace(/[^\w\-]+/g,'_')
       .replace(/^_+|_+$/g,'')||'item';
+  }
+
+  // ---------- state ----------
+  function currentState(){
+    return {
+      version:STATE_VERSION,
+      savedAt:new Date().toISOString(),
+      items:items.map(item=>({
+        id:item.id,
+        name:item.name,
+        area:item.area,
+        color:item.color,
+        textMode:item.textMode
+      })),
+      nextId,
+      shuffleSeed,
+      activePaletteId,
+      activeColourSequence:[...activeColourSequence],
+      settings:{
+        gap:getGap(),
+        cellSize:Number(cellInput.value),
+        displayGrid:displayGridInput.checked,
+        invertGrid:invertGridInput.checked,
+        displayText:displayTextInput.checked,
+        exportGrid:exportGridInput.checked,
+        exportText:exportTextInput.checked,
+        nightMode:document.body.classList.contains('night')
+      }
+    };
+  }
+
+  function saveLocalState(){
+    if(restoringState) return;
+    try{
+      localStorage.setItem(STATE_KEY,JSON.stringify(currentState()));
+    }catch(err){
+      console.warn('Could not autosave state',err);
+    }
+  }
+
+  function applyState(state){
+    if(!state || typeof state!=='object' || !Array.isArray(state.items)){
+      throw new Error('Invalid Area Blocks state file');
+    }
+
+    restoringState=true;
+    try{
+      items=state.items.map((item,index)=>({
+        id:Number.isFinite(Number(item.id)) ? Number(item.id) : index+1,
+        name:String(item.name ?? `Room ${index+1}`),
+        area:Math.max(.01,Number(item.area)||.01),
+        color:isValidHex(String(item.color||'')) ? String(item.color).toUpperCase() : '#CCCCCC',
+        textMode:item.textMode==='invert' ? 'invert' : 'auto'
+      }));
+
+      const highestId=items.reduce((m,item)=>Math.max(m,item.id),0);
+      nextId=Math.max(highestId+1,Number(state.nextId)||1);
+      shuffleSeed=Number.isFinite(Number(state.shuffleSeed)) ? Number(state.shuffleSeed) : Math.random();
+      activePaletteId=paletteById(state.activePaletteId).id;
+      activeColourSequence=Array.isArray(state.activeColourSequence)
+        ? state.activeColourSequence.filter(isValidHex).map(c=>c.toUpperCase())
+        : [];
+
+      const settings=state.settings || {};
+      const gap=Math.max(0,Math.min(10,Number(settings.gap ?? 2)));
+      gapSlider.value=gap.toFixed(1);
+      gapNumber.value=gap.toFixed(1);
+
+      const cell=Math.max(10,Math.min(30,Number(settings.cellSize ?? 18)));
+      cellInput.value=String(Math.round(cell));
+      cellValue.textContent=cellInput.value+' px';
+
+      displayGridInput.checked=!!settings.displayGrid;
+      invertGridInput.checked=!!settings.invertGrid;
+      displayTextInput.checked=settings.displayText!==false;
+      exportGridInput.checked=!!settings.exportGrid;
+      exportTextInput.checked=!!settings.exportText;
+      document.body.classList.toggle('night',!!settings.nightMode);
+      themeToggle.textContent=document.body.classList.contains('night') ? '☀' : '◐';
+
+      arrangement=[];
+      layoutBounds={maxX:0,maxY:0};
+      layoutDirty=true;
+      refreshColourSequence(false);
+      renderPaletteControl();
+      rebuild(true);
+    }finally{
+      restoringState=false;
+    }
+    saveLocalState();
+  }
+
+  function loadLocalState(){
+    try{
+      const raw=localStorage.getItem(STATE_KEY);
+      if(!raw) return false;
+      applyState(JSON.parse(raw));
+      return true;
+    }catch(err){
+      console.warn('Could not restore saved state',err);
+      return false;
+    }
   }
 
   // ---------- SVG ----------
@@ -1469,6 +1582,31 @@
   displayGridInput.addEventListener('change',renderStage);
   invertGridInput.addEventListener('change',renderStage);
   displayTextInput.addEventListener('change',renderStage);
+  exportGridInput.addEventListener('change',saveLocalState);
+  exportTextInput.addEventListener('change',saveLocalState);
+
+  const loadStateInput=document.getElementById('loadStateInput');
+
+  document.getElementById('saveStateBtn').addEventListener('click',()=>{
+    const json=JSON.stringify(currentState(),null,2);
+    downloadText('area-blocks-state.json',json,'application/json');
+  });
+
+  document.getElementById('loadStateBtn').addEventListener('click',()=>{
+    loadStateInput.value='';
+    loadStateInput.click();
+  });
+
+  loadStateInput.addEventListener('change',async()=>{
+    const file=loadStateInput.files && loadStateInput.files[0];
+    if(!file) return;
+    try{
+      applyState(JSON.parse(await file.text()));
+    }catch(err){
+      console.error(err);
+      alert('Could not load this state file.');
+    }
+  });
 
   document.getElementById('exportTogether').addEventListener('click',()=>{
     if(!items.length) return;
@@ -1553,15 +1691,17 @@
   themeToggle.addEventListener('click',()=>{
     document.body.classList.toggle('night');
     themeToggle.textContent=document.body.classList.contains('night') ? '☀' : '◐';
+    saveLocalState();
   });
 
-  // Initial palette + starter examples
-  refreshColourSequence(true);
-  renderPaletteControl();
-
-  addItem('Room 1',20);
-  addItem('Room 2',20);
-  addItem('Room 3',20);
+  // Restore the most recent browser state, otherwise use starter examples.
+  if(!loadLocalState()){
+    refreshColourSequence(true);
+    renderPaletteControl();
+    addItem('Room 1',20);
+    addItem('Room 2',20);
+    addItem('Room 3',20);
+  }
 })();
 </script>
 </body>
