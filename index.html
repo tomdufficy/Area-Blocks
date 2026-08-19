@@ -548,6 +548,8 @@
 
   let items = [];
   let arrangement = [];
+  let layoutBounds = {maxX:0,maxY:0};
+  let layoutDirty = true;
   let nextId = 1;
   let shuffleSeed = Math.random();
   let activePaletteId = 'random';
@@ -804,11 +806,13 @@
       textMode:'auto'
     });
 
+    layoutDirty=true;
     rebuild(true);
   }
 
   function deleteItem(id){
     items=items.filter(i=>i.id!==id);
+    layoutDirty=true;
     rebuild(true);
   }
 
@@ -828,43 +832,39 @@
     }));
 
     rooms=shuffled(rooms,rnd);
-
     const placed=[];
 
+    // Each room is a stack of contiguous horizontal strips, not dozens of
+    // individual 1 m² rectangles. This represents the exact same stepped
+    // geometry but makes collision testing dramatically cheaper.
     function localRects(room){
-      return room.geometry.cells.map(px=>({
-        x:px.x,
-        y:px.y,
-        w:px.fraction,
-        h:1
-      }));
+      if(room._rowRects) return room._rowRects;
+      const rows=new Map();
+      for(const px of room.geometry.cells){
+        const end=px.x+px.fraction;
+        rows.set(px.y,Math.max(rows.get(px.y)||0,end));
+      }
+      room._rowRects=[...rows.entries()].map(([y,w])=>({x:0,y,w,h:1}));
+      return room._rowRects;
     }
 
     function worldRects(room,x=room.x,y=room.y){
-      return localRects(room).map(r=>({
-        x:x+r.x,
-        y:y+r.y,
-        w:r.w,
-        h:r.h
-      }));
+      return localRects(room).map(r=>({x:x+r.x,y:y+r.y,w:r.w,h:r.h}));
     }
 
     function rectGapOkay(a,b){
-      const separatedX =
+      return (
         a.x+a.w+gap <= b.x + 1e-9 ||
-        b.x+b.w+gap <= a.x + 1e-9;
-
-      const separatedY =
+        b.x+b.w+gap <= a.x + 1e-9 ||
         a.y+a.h+gap <= b.y + 1e-9 ||
-        b.y+b.h+gap <= a.y + 1e-9;
-
-      return separatedX || separatedY;
+        b.y+b.h+gap <= a.y + 1e-9
+      );
     }
 
     function validPlacement(room,x,y){
       const candidate=worldRects(room,x,y);
       for(const p of placed){
-        const existing=worldRects(p);
+        const existing=p._worldRects || (p._worldRects=worldRects(p));
         for(const a of candidate){
           for(const b of existing){
             if(!rectGapOkay(a,b)) return false;
@@ -878,7 +878,8 @@
       if(!list.length) return {minX:0,minY:0,maxX:0,maxY:0};
       let minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=-Infinity;
       for(const p of list){
-        for(const r of worldRects(p)){
+        const rects=p._worldRects || worldRects(p);
+        for(const r of rects){
           minX=Math.min(minX,r.x);
           minY=Math.min(minY,r.y);
           maxX=Math.max(maxX,r.x+r.w);
@@ -894,12 +895,10 @@
       const candidates=[];
       const local=localRects(room);
 
-      // Align actual occupied cell edges against actual occupied cell edges,
-      // so the requested gap is measured from visible geometry rather than
-      // from the room's bounding box.
       for(const p of placed){
-        const existing=worldRects(p);
+        const existing=p._worldRects || (p._worldRects=worldRects(p));
 
+        // Use row edges rather than every individual cell edge.
         for(const a of local){
           for(const b of existing){
             candidates.push(
@@ -912,32 +911,34 @@
         }
       }
 
-      // Keep positions non-negative so the composition stays within stage origin.
-      const filtered=candidates
-        .map(c=>({x:Math.max(0,c.x),y:Math.max(0,c.y)}))
-        .filter(c=>validPlacement(room,c.x,c.y));
+      const unique=new Map();
+      for(const c of candidates){
+        const x=Math.max(0,c.x);
+        const y=Math.max(0,c.y);
+        const key=`${x.toFixed(3)},${y.toFixed(3)}`;
+        if(!unique.has(key)) unique.set(key,{x,y});
+      }
 
-      const unique=[...new Map(
-        filtered.map(c=>[
-          `${c.x.toFixed(4)},${c.y.toFixed(4)}`,
-          c
-        ])
-      ).values()];
+      // Score a bounded sample first. This keeps shuffle responsive even with
+      // many rooms while preserving a large variety of possible layouts.
+      let possible=shuffled([...unique.values()],rnd);
+      if(possible.length>180) possible=possible.slice(0,180);
+      possible=possible.filter(c=>validPlacement(room,c.x,c.y));
 
-      if(unique.length) return unique;
+      if(possible.length) return possible;
 
       const b=occupiedBounds(placed);
       return [{x:b.maxX+gap,y:0}];
     }
 
     for(const room of rooms){
-      const candidates=shuffled(candidatePositions(room),rnd);
-
+      const candidates=candidatePositions(room);
       let best=candidates[0];
       let bestScore=Infinity;
 
       for(const c of candidates){
         const test={...room,x:c.x,y:c.y};
+        test._worldRects=worldRects(test);
         const bounds=occupiedBounds([...placed,test]);
         const width=bounds.maxX-bounds.minX;
         const height=bounds.maxY-bounds.minY;
@@ -946,7 +947,6 @@
 
         let score;
         if(cloudMode){
-          // Looser clustered compositions: still exact gap, but less rigid packing.
           const cx=(bounds.minX+bounds.maxX)/2;
           const cy=(bounds.minY+bounds.maxY)/2;
           const rcx=c.x+room.geometry.width/2;
@@ -963,17 +963,22 @@
         }
       }
 
-      placed.push({...room,x:best.x,y:best.y});
+      const placedRoom={...room,x:best.x,y:best.y};
+      placedRoom._worldRects=worldRects(placedRoom);
+      placed.push(placedRoom);
     }
 
     const bounds=occupiedBounds(placed);
     arrangement=placed;
+    layoutBounds={maxX:bounds.maxX,maxY:bounds.maxY};
+    layoutDirty=false;
 
-    return {
-      placed,
-      maxX:bounds.maxX,
-      maxY:bounds.maxY
-    };
+    return {placed,maxX:bounds.maxX,maxY:bounds.maxY};
+  }
+
+  function ensureLayout(){
+    if(layoutDirty || arrangement.length!==items.length) return pack();
+    return {placed:arrangement,maxX:layoutBounds.maxX,maxY:layoutBounds.maxY};
   }
 
   // ---------- UI ----------
@@ -1058,6 +1063,7 @@
 
       area.addEventListener('input',e=>{
         item.area=Math.max(.01,Number(e.target.value)||.01);
+        layoutDirty=true;
         renderStage();
       });
 
@@ -1079,7 +1085,7 @@
     const cell=Number(cellInput.value);
     document.documentElement.style.setProperty('--cell',cell+'px');
 
-    const {placed,maxX,maxY}=pack();
+    const {placed,maxX,maxY}=ensureLayout();
 
     stage.style.width=Math.max(700,(maxX+6)*cell)+'px';
     stage.style.height=Math.max(520,(maxY+6)*cell)+'px';
@@ -1214,7 +1220,7 @@
   }
 
   function togetherSvg(){
-    if(!arrangement.length) pack();
+    ensureLayout();
 
     let maxX=0,maxY=0;
 
@@ -1336,6 +1342,7 @@
 
   document.getElementById('shuffleBtn').addEventListener('click',()=>{
     shuffleSeed=Math.random();
+    layoutDirty=true;
     renderStage();
   });
 
@@ -1344,6 +1351,8 @@
   document.getElementById('clearBtn').addEventListener('click',()=>{
     items=[];
     arrangement=[];
+    layoutBounds={maxX:0,maxY:0};
+    layoutDirty=true;
     rebuild(true);
   });
 
@@ -1351,6 +1360,7 @@
     const v=Math.round(Math.max(0,Math.min(10,Number(value)||0))*10)/10;
     if(source!=='slider') gapSlider.value=v.toFixed(1);
     if(source!=='number') gapNumber.value=v.toFixed(1);
+    layoutDirty=true;
     renderStage();
   }
 
@@ -1374,7 +1384,7 @@
 
   document.getElementById('exportSeparate').addEventListener('click',()=>{
     if(!items.length) return;
-    if(!arrangement.length) pack();
+    ensureLayout();
 
     arrangement.forEach((p,i)=>{
       setTimeout(()=>{
@@ -1400,7 +1410,7 @@
 
   document.getElementById('exportSeparateJpg').addEventListener('click',async()=>{
     if(!items.length) return;
-    if(!arrangement.length) pack();
+    ensureLayout();
     const bg=document.body.classList.contains('night') ? '#1b2532' : '#ffffff';
 
     for(let i=0;i<arrangement.length;i++){
