@@ -486,6 +486,7 @@
       <div class="row">
         <button class="btn grow" id="saveStateBtn">Save state</button>
         <button class="btn grow" id="loadStateBtn">Load state</button>
+        <button class="btn grow" id="resetAppBtn">Reset app</button>
         <input id="loadStateInput" type="file" accept="application/json,.json" hidden>
       </div>
       <button class="btn" id="exportTogether">Export current layout SVG</button>
@@ -1675,6 +1676,17 @@
   document.getElementById('loadStateBtn').addEventListener('click',()=>{
     loadStateInput.value='';
     loadStateInput.click();
+  });
+
+  document.getElementById('resetAppBtn').addEventListener('click',()=>{
+    const confirmed=confirm('Reset the app to its default state? This will replace your locally saved session.');
+    if(!confirmed) return;
+    try{
+      localStorage.removeItem(STATE_KEY);
+    }catch(err){
+      console.warn('Could not clear saved state',err);
+    }
+    location.reload();
   });
 
   loadStateInput.addEventListener('change',async()=>{
