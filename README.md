@@ -2,6 +2,8 @@
 
 Area Blocks is a lightweight browser-based tool for quickly visualising programme areas as proportional 1 m² grid blocks.
 
+![Area Blocks interface](assets/area-blocks-demo.jpg)
+
 ## Features
 
 - Add, rename, recolour and remove programme areas
