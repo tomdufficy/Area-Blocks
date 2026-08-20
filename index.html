@@ -515,6 +515,8 @@
       <button class="btn" id="exportSeparate">Export separate SVGs</button>
       <button class="btn" id="exportTogetherJpg">Export current layout JPG</button>
       <button class="btn" id="exportSeparateJpg">Export separate JPGs</button>
+      <button class="btn" id="exportDxfCells">Export DXF - grouped cells</button>
+      <button class="btn" id="exportDxfBoundaries">Export DXF - closed boundaries</button>
     </div>
   </aside>
 
@@ -1602,6 +1604,210 @@ Specialist Teaching    408"></textarea>
     </svg>`;
   }
 
+  // ---------- DXF ----------
+  // Conservative AutoCAD R12 ASCII DXF for broad CAD compatibility.
+  // Coordinates are written in metres by convention: 1 app grid cell = 1 drawing unit = 1 m.
+  // App Y coordinates run downward, so DXF Y is flipped to keep the layout upright.
+  function dxfSafeName(value,fallback="ROOM"){
+    const cleaned=String(value||fallback)
+      .toUpperCase()
+      .replace(/[^A-Z0-9_$-]+/g,'_')
+      .replace(/^_+|_+$/g,'');
+    return (cleaned||fallback).slice(0,50);
+  }
+
+  function dxfLayerName(p,index){
+    return dxfSafeName(`ROOM_${String(index+1).padStart(2,'0')}_${p.item.name}`);
+  }
+
+  function dxfPair(code,value){
+    return `${code}\n${value}\n`;
+  }
+
+  function dxfAciFromHex(hex){
+    // R12 does not support true-colour values. Map to a stable basic ACI colour.
+    const [r,g,b]=hexToRgb(hex);
+    const palette=[
+      [7,255,255,255],
+      [1,255,0,0],
+      [2,255,255,0],
+      [3,0,255,0],
+      [4,0,255,255],
+      [5,0,0,255],
+      [6,255,0,255]
+    ];
+    let best=7,bestDist=Infinity;
+    for(const [aci,pr,pg,pb] of palette){
+      const d=(r-pr)**2+(g-pg)**2+(b-pb)**2;
+      if(d<bestDist){bestDist=d;best=aci;}
+    }
+    return best;
+  }
+
+  function dxfPolyline(points,layer,closed=true){
+    let out='';
+    out+=dxfPair(0,'POLYLINE');
+    out+=dxfPair(8,layer);
+    out+=dxfPair(66,1);
+    out+=dxfPair(70,closed ? 1 : 0);
+    out+=dxfPair(10,0)+dxfPair(20,0)+dxfPair(30,0);
+    for(const [x,y] of points){
+      out+=dxfPair(0,'VERTEX');
+      out+=dxfPair(8,layer);
+      out+=dxfPair(10,Number(x.toFixed(6)));
+      out+=dxfPair(20,Number(y.toFixed(6)));
+      out+=dxfPair(30,0);
+    }
+    out+=dxfPair(0,'SEQEND');
+    out+=dxfPair(8,layer);
+    return out;
+  }
+
+  function dxfHeader(){
+    let out='';
+    out+=dxfPair(0,'SECTION');
+    out+=dxfPair(2,'HEADER');
+    out+=dxfPair(9,'$ACADVER');
+    out+=dxfPair(1,'AC1009');
+    out+=dxfPair(9,'$MEASUREMENT');
+    out+=dxfPair(70,1); // metric drawing
+    out+=dxfPair(0,'ENDSEC');
+    return out;
+  }
+
+  function dxfTables(){
+    let out='';
+    out+=dxfPair(0,'SECTION');
+    out+=dxfPair(2,'TABLES');
+
+    // Define CONTINUOUS explicitly for stricter DXF readers.
+    out+=dxfPair(0,'TABLE');
+    out+=dxfPair(2,'LTYPE');
+    out+=dxfPair(70,1);
+    out+=dxfPair(0,'LTYPE');
+    out+=dxfPair(2,'CONTINUOUS');
+    out+=dxfPair(70,0);
+    out+=dxfPair(3,'Solid line');
+    out+=dxfPair(72,65);
+    out+=dxfPair(73,0);
+    out+=dxfPair(40,0.0);
+    out+=dxfPair(0,'ENDTAB');
+
+    out+=dxfPair(0,'TABLE');
+    out+=dxfPair(2,'LAYER');
+    out+=dxfPair(70,arrangement.length+1);
+
+    out+=dxfPair(0,'LAYER');
+    out+=dxfPair(2,'0');
+    out+=dxfPair(70,0);
+    out+=dxfPair(62,7);
+    out+=dxfPair(6,'CONTINUOUS');
+
+    arrangement.forEach((p,i)=>{
+      out+=dxfPair(0,'LAYER');
+      out+=dxfPair(2,dxfLayerName(p,i));
+      out+=dxfPair(70,0);
+      out+=dxfPair(62,dxfAciFromHex(p.item.color));
+      out+=dxfPair(6,'CONTINUOUS');
+    });
+
+    out+=dxfPair(0,'ENDTAB');
+    out+=dxfPair(0,'ENDSEC');
+    return out;
+  }
+
+  function dxfBoundaryPoints(p,maxY){
+    const widths=[];
+    for(const px of p.geometry.cells){
+      const end=px.x+px.fraction;
+      widths[px.y]=Math.max(widths[px.y]||0,end);
+    }
+    if(!widths.length) return [];
+
+    const local=[[0,0],[widths[0],0]];
+    for(let y=0;y<widths.length;y++){
+      local.push([widths[y],y+1]);
+      if(y<widths.length-1 && Math.abs(widths[y+1]-widths[y])>1e-9){
+        local.push([widths[y+1],y+1]);
+      }
+    }
+    local.push([0,widths.length]);
+
+    return local.map(([x,y])=>[p.x+x,maxY-(p.y+y)]);
+  }
+
+  function groupedCellsDxf(){
+    ensureLayout();
+    const maxY=layoutBounds.maxY;
+    let out=dxfHeader()+dxfTables();
+
+    // Each room is a BLOCK. Individual cell boundaries remain separate POLYLINE entities.
+    out+=dxfPair(0,'SECTION');
+    out+=dxfPair(2,'BLOCKS');
+    arrangement.forEach((p,i)=>{
+      const blockName=`AB_ROOM_${String(i+1).padStart(2,'0')}`;
+      const layer=dxfLayerName(p,i);
+
+      out+=dxfPair(0,'BLOCK');
+      out+=dxfPair(8,layer);
+      out+=dxfPair(2,blockName);
+      out+=dxfPair(70,0);
+      out+=dxfPair(10,0)+dxfPair(20,0)+dxfPair(30,0);
+      out+=dxfPair(3,blockName);
+      out+=dxfPair(1,'');
+
+      for(const px of p.geometry.cells){
+        const x0=px.x;
+        const x1=x0+px.fraction;
+        const yTop=px.y;
+        const yBottom=yTop+1;
+        out+=dxfPolyline([
+          [x0,-yBottom],
+          [x1,-yBottom],
+          [x1,-yTop],
+          [x0,-yTop]
+        ],layer,true);
+      }
+
+      out+=dxfPair(0,'ENDBLK');
+      out+=dxfPair(8,layer);
+    });
+    out+=dxfPair(0,'ENDSEC');
+
+    out+=dxfPair(0,'SECTION');
+    out+=dxfPair(2,'ENTITIES');
+    arrangement.forEach((p,i)=>{
+      const blockName=`AB_ROOM_${String(i+1).padStart(2,'0')}`;
+      const layer=dxfLayerName(p,i);
+      out+=dxfPair(0,'INSERT');
+      out+=dxfPair(8,layer);
+      out+=dxfPair(2,blockName);
+      out+=dxfPair(10,Number(p.x.toFixed(6)));
+      out+=dxfPair(20,Number((maxY-p.y).toFixed(6)));
+      out+=dxfPair(30,0);
+    });
+    out+=dxfPair(0,'ENDSEC');
+    out+=dxfPair(0,'EOF');
+    return out;
+  }
+
+  function closedBoundariesDxf(){
+    ensureLayout();
+    const maxY=layoutBounds.maxY;
+    let out=dxfHeader()+dxfTables();
+    out+=dxfPair(0,'SECTION');
+    out+=dxfPair(2,'ENTITIES');
+    arrangement.forEach((p,i)=>{
+      const points=dxfBoundaryPoints(p,maxY);
+      if(points.length>=3){
+        out+=dxfPolyline(points,dxfLayerName(p,i),true);
+      }
+    });
+    out+=dxfPair(0,'ENDSEC');
+    out+=dxfPair(0,'EOF');
+    return out;
+  }
+
   function downloadText(filename,text,type="image/svg+xml"){
     const blob=new Blob([text],{type});
     const url=URL.createObjectURL(blob);
@@ -1937,6 +2143,17 @@ Specialist Teaching    408"></textarea>
     if(!files.length) return;
     const zip=await makeZip(files);
     downloadBlob('area-blocks-separate-jpg.zip',zip);
+  });
+
+
+  document.getElementById('exportDxfCells').addEventListener('click',()=>{
+    if(!items.length) return;
+    downloadText('area-blocks-grouped-cells.dxf',groupedCellsDxf(),'application/dxf');
+  });
+
+  document.getElementById('exportDxfBoundaries').addEventListener('click',()=>{
+    if(!items.length) return;
+    downloadText('area-blocks-closed-boundaries.dxf',closedBoundariesDxf(),'application/dxf');
   });
 
 
