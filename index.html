@@ -403,6 +403,23 @@
   .paletteOption.active{background:var(--button-hover)}
   .paletteOptionName{font-size:12px;font-weight:600}
 
+  .pasteDialog{
+    width:min(560px,calc(100vw - 32px));
+    border:1px solid var(--line);
+    border-radius:10px;
+    padding:0;
+    background:var(--panel);
+    color:var(--ink);
+    box-shadow:0 14px 40px rgba(0,0,0,.22);
+  }
+  .pasteDialog::backdrop{background:rgba(0,0,0,.28)}
+  .pasteDialogInner{padding:16px;display:grid;gap:10px}
+  .pasteDialog textarea{
+    width:100%;min-height:220px;resize:vertical;
+    border:1px solid var(--line);border-radius:7px;padding:9px;
+    background:var(--button);color:var(--ink);font:12px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+
   @media (max-width:860px){
     .app{grid-template-columns:1fr;grid-template-rows:auto 1fr}
     aside{border-right:0;border-bottom:1px solid var(--line);max-height:58vh}
@@ -489,12 +506,31 @@
         <button class="btn grow" id="resetAppBtn">Reset app</button>
         <input id="loadStateInput" type="file" accept="application/json,.json" hidden>
       </div>
+      <div class="row">
+        <button class="btn grow" id="importCsvBtn">Import CSV</button>
+        <button class="btn grow" id="pasteSpreadsheetBtn">Paste spreadsheet data</button>
+      </div>
+      <input id="importCsvInput" type="file" accept="text/csv,.csv" hidden>
       <button class="btn" id="exportTogether">Export current layout SVG</button>
       <button class="btn" id="exportSeparate">Export separate SVGs</button>
       <button class="btn" id="exportTogetherJpg">Export current layout JPG</button>
       <button class="btn" id="exportSeparateJpg">Export separate JPGs</button>
     </div>
   </aside>
+
+  <dialog id="pasteSpreadsheetDialog" class="pasteDialog">
+    <div class="pasteDialogInner">
+      <strong>Paste spreadsheet data</strong>
+      <div class="sub">Copy rows from Excel or Google Sheets: room name, area, optional hex colour. No headings.</div>
+      <textarea id="pasteSpreadsheetText" placeholder="General Teaching    1800    #F8ABAD
+Specialist Teaching    408"></textarea>
+      <div class="row">
+        <button class="btn grow" id="cancelPasteBtn">Cancel</button>
+        <button class="btn primary grow" id="importPasteBtn">Import</button>
+      </div>
+    </div>
+  </dialog>
+
   <div id="resizer" aria-hidden="true"></div>
 
   <main>
@@ -804,7 +840,7 @@
   }
 
   // ---------- data ----------
-  function addItem(name="",area=20){
+  function addItem(name="",area=20,color=null,rebuildNow=true){
     const id=nextId++;
     refreshColourSequence(false);
 
@@ -812,12 +848,116 @@
       id,
       name:name||`Room ${id}`,
       area:Math.max(.1,Math.round((Number(area)||.1)*10)/10),
-      color:colourForIndex(items.length),
+      color:isValidHex(String(color||'')) ? String(color).toUpperCase() : colourForIndex(items.length),
       textMode:'auto'
     });
 
     layoutDirty=true;
-    rebuild(true);
+    if(rebuildNow) rebuild(true);
+  }
+
+  function randomPaletteColour(){
+    refreshColourSequence(false);
+    if(!activeColourSequence.length) refreshColourSequence(true);
+    return activeColourSequence[Math.floor(Math.random()*activeColourSequence.length)] || '#CCCCCC';
+  }
+
+  function parseCsvRows(text){
+    const rows=[];
+    let row=[];
+    let field='';
+    let quoted=false;
+
+    for(let i=0;i<text.length;i++){
+      const ch=text[i];
+      if(quoted){
+        if(ch==='"' && text[i+1]==='"'){
+          field+='"';
+          i++;
+        }else if(ch==='"'){
+          quoted=false;
+        }else{
+          field+=ch;
+        }
+      }else if(ch==='"'){
+        quoted=true;
+      }else if(ch===','){
+        row.push(field);
+        field='';
+      }else if(ch==='\n'){
+        row.push(field.replace(/\r$/,''));
+        rows.push(row);
+        row=[];
+        field='';
+      }else{
+        field+=ch;
+      }
+    }
+
+    row.push(field.replace(/\r$/,''));
+    if(row.some(value=>value.trim()!=='')) rows.push(row);
+    return rows;
+  }
+
+  function importCsv(text){
+    const rows=parseCsvRows(text);
+    let added=0;
+    let skipped=0;
+
+    for(const row of rows){
+      if(row.every(value=>String(value).trim()==='')) continue;
+
+      const name=String(row[0] ?? '').trim();
+      const areaText=String(row[1] ?? '').trim();
+      const area=Number(areaText);
+
+      if(!name || !areaText || !Number.isFinite(area) || area<=0){
+        skipped++;
+        continue;
+      }
+
+      const requestedColour=String(row[2] ?? '').trim();
+      const colour=isValidHex(requestedColour) ? requestedColour.toUpperCase() : randomPaletteColour();
+      addItem(name,area,colour,false);
+      added++;
+    }
+
+    if(added){
+      layoutDirty=true;
+      rebuild(true);
+    }
+
+    return {added,skipped};
+  }
+
+  function importSpreadsheetText(text){
+    const rows=String(text||'').split(/\r?\n/);
+    let added=0;
+    let skipped=0;
+
+    for(const line of rows){
+      if(!line.trim()) continue;
+      const row=line.split('\t');
+      const name=String(row[0] ?? '').trim();
+      const areaText=String(row[1] ?? '').trim();
+      const area=Number(areaText);
+
+      if(!name || !areaText || !Number.isFinite(area) || area<=0){
+        skipped++;
+        continue;
+      }
+
+      const requestedColour=String(row[2] ?? '').trim();
+      const colour=isValidHex(requestedColour) ? requestedColour.toUpperCase() : randomPaletteColour();
+      addItem(name,area,colour,false);
+      added++;
+    }
+
+    if(added){
+      layoutDirty=true;
+      rebuild(true);
+    }
+    return {added,skipped};
   }
 
   function deleteItem(id){
@@ -1667,6 +1807,50 @@
   exportTextInput.addEventListener('change',saveLocalState);
 
   const loadStateInput=document.getElementById('loadStateInput');
+  const importCsvInput=document.getElementById('importCsvInput');
+  const pasteSpreadsheetDialog=document.getElementById('pasteSpreadsheetDialog');
+  const pasteSpreadsheetText=document.getElementById('pasteSpreadsheetText');
+
+  document.getElementById('pasteSpreadsheetBtn').addEventListener('click',()=>{
+    pasteSpreadsheetText.value='';
+    pasteSpreadsheetDialog.showModal();
+    setTimeout(()=>pasteSpreadsheetText.focus(),0);
+  });
+
+  document.getElementById('cancelPasteBtn').addEventListener('click',()=>pasteSpreadsheetDialog.close());
+
+  document.getElementById('importPasteBtn').addEventListener('click',()=>{
+    const result=importSpreadsheetText(pasteSpreadsheetText.value);
+    if(!result.added){
+      alert('No rooms were imported. Copy spreadsheet columns in this order: room name, area, optional #RRGGBB colour. Do not include headings.');
+      return;
+    }
+    pasteSpreadsheetDialog.close();
+    if(result.skipped){
+      alert(`Imported ${result.added} room${result.added===1?'':'s'}. Skipped ${result.skipped} invalid row${result.skipped===1?'':'s'}.`);
+    }
+  });
+
+  document.getElementById('importCsvBtn').addEventListener('click',()=>{
+    importCsvInput.value='';
+    importCsvInput.click();
+  });
+
+  importCsvInput.addEventListener('change',async()=>{
+    const file=importCsvInput.files && importCsvInput.files[0];
+    if(!file) return;
+    try{
+      const result=importCsv(await file.text());
+      if(!result.added){
+        alert('No rooms were imported. Use: room name, area, optional #RRGGBB colour. Do not include a header row.');
+      }else if(result.skipped){
+        alert(`Imported ${result.added} room${result.added===1?'':'s'}. Skipped ${result.skipped} invalid row${result.skipped===1?'':'s'}.`);
+      }
+    }catch(err){
+      console.error(err);
+      alert('Could not import this CSV file.');
+    }
+  });
 
   document.getElementById('saveStateBtn').addEventListener('click',()=>{
     const json=JSON.stringify(currentState(),null,2);
