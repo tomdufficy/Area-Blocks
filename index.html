@@ -503,7 +503,6 @@
       <div class="row">
         <button class="btn grow" id="saveStateBtn">Save state</button>
         <button class="btn grow" id="loadStateBtn">Load state</button>
-        <button class="btn grow" id="resetAppBtn">Reset app</button>
         <input id="loadStateInput" type="file" accept="application/json,.json" hidden>
       </div>
       <div class="row">
@@ -901,9 +900,9 @@ Specialist Teaching    408"></textarea>
     return rows;
   }
 
-  function importCsv(text){
+  function importCsv(text,replaceExisting=false){
     const rows=parseCsvRows(text);
-    let added=0;
+    const imported=[];
     let skipped=0;
 
     for(const row of rows){
@@ -920,21 +919,26 @@ Specialist Teaching    408"></textarea>
 
       const requestedColour=String(row[2] ?? '').trim();
       const colour=isValidHex(requestedColour) ? requestedColour.toUpperCase() : randomPaletteColour();
-      addItem(name,area,colour,false);
-      added++;
+      imported.push({name,area,colour});
     }
 
-    if(added){
+    if(imported.length){
+      if(replaceExisting){
+        items=[];
+        arrangement=[];
+        layoutBounds={maxX:0,maxY:0};
+      }
+      for(const entry of imported) addItem(entry.name,entry.area,entry.colour,false);
       layoutDirty=true;
       rebuild(true);
     }
 
-    return {added,skipped};
+    return {added:imported.length,skipped};
   }
 
-  function importSpreadsheetText(text){
+  function importSpreadsheetText(text,replaceExisting=false){
     const rows=String(text||'').split(/\r?\n/);
-    let added=0;
+    const imported=[];
     let skipped=0;
 
     for(const line of rows){
@@ -951,15 +955,20 @@ Specialist Teaching    408"></textarea>
 
       const requestedColour=String(row[2] ?? '').trim();
       const colour=isValidHex(requestedColour) ? requestedColour.toUpperCase() : randomPaletteColour();
-      addItem(name,area,colour,false);
-      added++;
+      imported.push({name,area,colour});
     }
 
-    if(added){
+    if(imported.length){
+      if(replaceExisting){
+        items=[];
+        arrangement=[];
+        layoutBounds={maxX:0,maxY:0};
+      }
+      for(const entry of imported) addItem(entry.name,entry.area,entry.colour,false);
       layoutDirty=true;
       rebuild(true);
     }
-    return {added,skipped};
+    return {added:imported.length,skipped};
   }
 
   function deleteItem(id){
@@ -2026,7 +2035,8 @@ Specialist Teaching    408"></textarea>
   document.getElementById('cancelPasteBtn').addEventListener('click',()=>pasteSpreadsheetDialog.close());
 
   document.getElementById('importPasteBtn').addEventListener('click',()=>{
-    const result=importSpreadsheetText(pasteSpreadsheetText.value);
+    const replaceExisting=items.length>0 && confirm('Replace existing entries with the pasted data?\n\nOK = replace existing\nCancel = keep existing and add the pasted entries');
+    const result=importSpreadsheetText(pasteSpreadsheetText.value,replaceExisting);
     if(!result.added){
       alert('No rooms were imported. Copy spreadsheet columns in this order: room name, area, optional #RRGGBB colour. Do not include headings.');
       return;
@@ -2046,7 +2056,8 @@ Specialist Teaching    408"></textarea>
     const file=importCsvInput.files && importCsvInput.files[0];
     if(!file) return;
     try{
-      const result=importCsv(await file.text());
+      const replaceExisting=items.length>0 && confirm('Replace existing entries with the imported CSV?\n\nOK = replace existing\nCancel = keep existing and add the imported entries');
+      const result=importCsv(await file.text(),replaceExisting);
       if(!result.added){
         alert('No rooms were imported. Use: room name, area, optional #RRGGBB colour. Do not include a header row.');
       }else if(result.skipped){
@@ -2066,17 +2077,6 @@ Specialist Teaching    408"></textarea>
   document.getElementById('loadStateBtn').addEventListener('click',()=>{
     loadStateInput.value='';
     loadStateInput.click();
-  });
-
-  document.getElementById('resetAppBtn').addEventListener('click',()=>{
-    const confirmed=confirm('Reset the app to its default state? This will replace your locally saved session.');
-    if(!confirmed) return;
-    try{
-      localStorage.removeItem(STATE_KEY);
-    }catch(err){
-      console.warn('Could not clear saved state',err);
-    }
-    location.reload();
   });
 
   loadStateInput.addEventListener('change',async()=>{

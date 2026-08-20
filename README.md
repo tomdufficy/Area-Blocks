@@ -16,7 +16,7 @@ Area Blocks is a lightweight browser-based tool for quickly visualising programm
 - Adjustable display scale and spacing
 - Automatic local session saving
 - Save and load projects as JSON
-- Reset the app to its original state
+- Import programme data from CSV or pasted spreadsheet rows
 - Export layouts and individual rooms as SVG or JPG
 
 ## Usage
@@ -37,9 +37,15 @@ For project management:
 
 - **Save State** — downloads the current project as a `.json` file
 - **Load State** — restores a previously saved `.json` file
-- **Reset app** — clears the locally saved session and returns the app to its original default state
+- **Clear** — removes all current programme entries
 
 JSON state files can be transferred between browsers, devices, or users, making it easy to share programme configurations, colour schemes, layout settings, and other project options.
+
+### Importing Data
+
+Programme entries can also be imported using **Import CSV** or **Paste spreadsheet data**. Rows should contain the room name, area, and optionally a `#RRGGBB` colour value, with no header row.
+
+If entries already exist, the app asks whether to replace them. Choose **OK** to replace the existing entries, or **Cancel** to keep them and append the imported entries.
 
 ### Exporting
 
